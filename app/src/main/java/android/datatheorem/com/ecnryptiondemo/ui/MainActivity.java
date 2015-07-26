@@ -2,64 +2,94 @@ package android.datatheorem.com.ecnryptiondemo.ui;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
+import android.content.pm.ActivityInfo;
 import android.datatheorem.com.ecnryptiondemo.R;
 import android.datatheorem.com.ecnryptiondemo.listeners.ImageLoadedListener;
 import android.datatheorem.com.ecnryptiondemo.model.Model;
 import android.graphics.Bitmap;
-import android.media.Image;
 import android.os.Bundle;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.ImageView;
 
-public class MainActivity extends Activity implements ImageLoadedListener {
+public class MainActivity extends Activity {
+    private SwipeRefreshLayout container;
     private Model model;
     private ProgressDialog dialog;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         setContentView(R.layout.activity_main);
-        model = Model.getInstance();
-        dialog = new ProgressDialog(this);
-        dialog.setMessage("Loading...");
-        dialog.show();
-        model.getPhotoOfTheDay(this);
-    }
-
-    @Override
-    public void imageLoaded(final Bitmap image) {
-        runOnUiThread(new Runnable() {
+        container = ((SwipeRefreshLayout) findViewById(R.id.container));
+        container.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
-            public void run() {
-                if (dialog != null) {
-                    dialog.dismiss();
-                }
-                ((ImageView)findViewById(R.id.iv_picture_of_the_day)).setImageBitmap(image);
+            public void onRefresh() {
+                container.setRefreshing(false);
+                refresh();
             }
         });
+        model = new Model(this);
+        refresh();
 
+    }
+
+    private void refresh() {
+        dialog = new ProgressDialog(this);
+        dialog.setMessage("Loading...");
+        dialog.setCancelable(false);
+        dialog.show();
+
+        //Get the most recent picture from DB
+        model.getRecentPicture(new ImageLoadedListener() {
+
+            @Override
+            public void onImageReady(Bitmap image) {
+                final Bitmap recentPic = image;
+
+                //Load a new picture
+                model.loadNewPicture(new ImageLoadedListener() {
+                    @Override
+                    public void onImageReady(final Bitmap newImage) {
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (dialog != null) {
+                                    dialog.dismiss();
+                                }
+                                //Update the views
+                                if (recentPic != null) {
+                                    ((ImageView) findViewById(R.id.iv2)).setImageBitmap(recentPic);
+                                }
+                                if (newImage != null) {
+                                    ((ImageView) findViewById(R.id.iv1)).setImageBitmap(newImage);
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+        });
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
+        if (id == R.id.action_refresh) {
+            if (model != null) {
+                refresh();
+            }
         }
-
         return super.onOptionsItemSelected(item);
     }
 }
